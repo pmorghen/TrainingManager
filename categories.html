@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anatomy Master - Kategorien</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Anatomy Master</h1>
+        <div class="nav-links">
+            <a href="index.html">🏠 Home</a>
+            <a href="setup.html">⚙️ Setup</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h2>Kategorien verwalten</h2>
+                <button class="icon-btn" title="Neue Kategorie" onclick="showAddCategory()" style="font-size: 1.5rem; color: var(--accent-color); border: 1px solid var(--glass-border);">➕</button>
+            </div>
+
+            <div id="categoryForm" class="card" style="display: none; margin-bottom: 2rem; background: rgba(255,255,255,0.05);">
+                <h3 id="formTitle">Kategorie hinzufügen</h3>
+                <input type="hidden" id="categoryId">
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="categoryName">Name</label>
+                    <input type="text" id="categoryName" placeholder="z.B. Skelett">
+                </div>
+                <div class="actions">
+                    <button class="btn btn-primary" onclick="saveCategory()">Speichern</button>
+                    <button class="btn btn-secondary" onclick="hideCategoryForm()">Abbrechen</button>
+                </div>
+            </div>
+
+            <ul id="categoryList" class="item-list">
+                <!-- Loaded via JS -->
+            </ul>
+        </div>
+    </main>
+
+    <script src="db.js"></script>
+    <script>
+        const categoryList = document.getElementById('categoryList');
+        const categoryForm = document.getElementById('categoryForm');
+        const categoryNameInput = document.getElementById('categoryName');
+        const categoryIdInput = document.getElementById('categoryId');
+        const formTitle = document.getElementById('formTitle');
+
+        async function loadCategories() {
+            const categories = await db.categories.toArray();
+            const questions = await db.questions.toArray();
+            
+            categoryList.innerHTML = '';
+            categories.forEach(cat => {
+                const count = questions.filter(q => q.categoryIds && q.categoryIds.includes(cat.id)).length;
+                const li = document.createElement('li');
+                li.className = 'item-row';
+                li.innerHTML = `
+                    <div style="flex: 1;">
+                        <span>${cat.name}</span>
+                        <small style="opacity: 0.5; margin-left: 1rem;">(${count} Fragen)</small>
+                    </div>
+                    <div class="actions">
+                        <button class="icon-btn" title="Bearbeiten" onclick="editCategory(${cat.id}, '${cat.name}')">✏️</button>
+                        <button class="icon-btn" title="Löschen" onclick="deleteCategory(${cat.id})">🗑️</button>
+                    </div>
+                `;
+                categoryList.appendChild(li);
+            });
+        }
+
+        function showAddCategory() {
+            categoryIdInput.value = '';
+            categoryNameInput.value = '';
+            formTitle.innerText = 'Kategorie hinzufügen';
+            categoryForm.style.display = 'block';
+            categoryNameInput.focus();
+        }
+
+        function hideCategoryForm() {
+            categoryForm.style.display = 'none';
+        }
+
+        async function saveCategory() {
+            const name = categoryNameInput.value.trim();
+            const id = categoryIdInput.value;
+            if (!name) return;
+
+            if (id) {
+                await db.categories.update(parseInt(id), { name });
+            } else {
+                await db.categories.add({ name });
+            }
+            hideCategoryForm();
+            loadCategories();
+        }
+
+        function editCategory(id, name) {
+            categoryIdInput.value = id;
+            categoryNameInput.value = name;
+            formTitle.innerText = 'Kategorie bearbeiten';
+            categoryForm.style.display = 'block';
+            categoryNameInput.focus();
+        }
+
+        async function deleteCategory(id) {
+            if (confirm('Möchten Sie diese Kategorie wirklich löschen?')) {
+                await db.categories.delete(id);
+                loadCategories();
+            }
+        }
+
+        window.onload = loadCategories;
+    </script>
+</body>
+</html>

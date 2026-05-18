@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anatomy Master - Training</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Anatomy Master</h1>
+        <div class="nav-links">
+            <a href="index.html">🏠 Home</a>
+            <a href="setup.html">⚙️ Setup</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <div id="trainingCard" class="card" style="width: 1100px; max-width: 95%; margin: 2rem auto; min-height: 700px; display: flex; flex-direction: column;">
+            <div id="progressInfo" style="margin-bottom: 1rem; opacity: 0.6;">Frage 0 von 0</div>
+            
+            <!-- Content Area (Question and Answers) -->
+            <div id="trainingContent" style="flex: 1;">
+                <div id="questionView">
+                    <h2 id="questionText" style="font-size: 2.2rem; margin: 2rem 0; font-weight: 300; line-height: 1.4;">Lade Frage...</h2>
+                </div>
+
+                <div id="answerView" style="display: none;">
+                    <div style="text-align: left; background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; font-weight: 300;">
+                        <h4 style="margin-top: 0; margin-bottom: 1rem; opacity: 0.7; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">Richtige Antwort(en):</h4>
+                        <div id="answersList">
+                            <!-- Answers here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="actionArea" style="margin-top: auto; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.2);">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                    <button id="revealBtn" class="btn btn-primary training-btn" onclick="revealAnswers()">Antwort aufdecken</button>
+                </div>
+                
+                <div id="ratingButtons" style="display: none;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.8rem;">
+                        <button class="btn btn-primary training-btn" style="background: #28a745; color: white; border: none;" onclick="rateQuestion('easy')">Einfache Frage</button>
+                        <button class="btn btn-primary training-btn" style="background: #ffc107; color: #000; border: none;" onclick="rateQuestion('hard')">Schwierige Frage</button>
+                        <button class="btn btn-danger training-btn" style="border: none;" onclick="rateQuestion('unknown')">Nicht gewusst</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="finishedView" style="display: none;" class="text-center">
+                <h2 style="font-size: 2.5rem; margin-bottom: 1.5rem; font-weight: 300;">Training beendet!</h2>
+                <p style="margin-bottom: 2rem;">Sie haben alle Fragen in diesem Modus durchgearbeitet.</p>
+                <a href="index.html" class="btn btn-primary">Zum Hauptmenü</a>
+            </div>
+        </div>
+    </main>
+
+    <script src="db.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('mode'); // all, hard, easy, unknown
+        
+        let questions = [];
+        let currentIndex = 0;
+
+        async function rateQuestion(status) {
+            const q = questions[currentIndex];
+            await db.questions.update(q.id, { status: status });
+            
+            currentIndex++;
+            if (currentIndex >= questions.length) {
+                // If we finished the set, reload (to account for status changes) and reshuffle
+                await initTraining(true);
+            } else {
+                showQuestion();
+            }
+        }
+
+        async function initTraining(isRestart = false) {
+            try {
+                await db.open();
+                let allQuestions = await db.questions.toArray();
+                
+                let filteredQuestions = [];
+                if (mode === 'all') {
+                    filteredQuestions = allQuestions;
+                } else if (mode === 'hard') {
+                    filteredQuestions = allQuestions.filter(q => q.status === 'hard');
+                } else if (mode === 'easy') {
+                    filteredQuestions = allQuestions.filter(q => q.status === 'easy');
+                } else if (mode === 'unknown') {
+                    filteredQuestions = allQuestions.filter(q => q.status === 'unknown');
+                } else if (mode === 'category') {
+                    const catIds = (urlParams.get('catIds') || '').split(',').map(id => parseInt(id));
+                    const submode = urlParams.get('submode') || 'all';
+                    
+                    filteredQuestions = allQuestions.filter(q => 
+                        q.categoryIds && q.categoryIds.some(id => catIds.includes(id))
+                    );
+                    
+                    if (submode === 'hard') filteredQuestions = filteredQuestions.filter(q => q.status === 'hard');
+                    if (submode === 'easy') filteredQuestions = filteredQuestions.filter(q => q.status === 'easy');
+                    if (submode === 'unknown') filteredQuestions = filteredQuestions.filter(q => q.status === 'unknown');
+                }
+
+                // Shuffle
+                filteredQuestions.sort(() => Math.random() - 0.5);
+
+                if (filteredQuestions.length === 0) {
+                    if (isRestart) {
+                        document.getElementById('trainingContent').style.display = 'none';
+                        document.getElementById('actionArea').style.display = 'none';
+                        document.getElementById('progressInfo').style.visibility = 'hidden';
+                        document.getElementById('finishedView').style.display = 'block';
+                    } else {
+                        document.getElementById('questionText').innerText = "Keine Fragen gefunden. Bitte fügen Sie im Setup Fragen hinzu oder erstellen Sie Testfragen.";
+                        document.getElementById('revealBtn').style.display = 'none';
+                    }
+                    document.getElementById('progressInfo').innerText = "Frage 0 von 0";
+                    return;
+                }
+
+                questions = filteredQuestions;
+                currentIndex = 0;
+                document.getElementById('finishedView').style.display = 'none';
+                document.getElementById('trainingContent').style.display = 'block';
+                document.getElementById('actionArea').style.display = 'block';
+                document.getElementById('progressInfo').style.visibility = 'visible';
+                showQuestion();
+            } catch (err) {
+                console.error(err);
+                document.getElementById('questionText').innerText = "Fehler: " + err.message + ". Bitte prüfen Sie, ob Ihr Browser IndexedDB unterstützt.";
+            }
+        }
+
+        function showQuestion() {
+            const q = questions[currentIndex];
+            document.getElementById('progressInfo').innerText = `Frage ${currentIndex + 1} von ${questions.length}`;
+            document.getElementById('questionText').innerText = q.text;
+            document.getElementById('answerView').style.display = 'none';
+            document.getElementById('revealBtn').style.display = 'inline-block';
+            document.getElementById('ratingButtons').style.display = 'none';
+            
+            const list = document.getElementById('answersList');
+            list.innerHTML = '';
+            q.answers.forEach((ans, i) => {
+                const div = document.createElement('div');
+                div.style.padding = '0.9rem 0';
+                div.style.lineHeight = '1.6';
+                div.style.borderBottom = i < q.answers.length - 1 ? '1px solid rgba(255,255,255,0.12)' : 'none';
+                div.style.display = 'flex';
+                div.style.alignItems = 'center';
+                div.innerHTML = `<span style="color: var(--accent-color); margin-right: 0.8rem; font-size: 1.2rem;">•</span> <span>${ans}</span>`;
+                list.appendChild(div);
+            });
+        }
+
+        function revealAnswers() {
+            document.getElementById('revealBtn').style.display = 'none';
+            document.getElementById('answerView').style.display = 'block';
+            document.getElementById('ratingButtons').style.display = 'block';
+        }
+
+        window.onload = initTraining;
+    </script>
+</body>
+</html>

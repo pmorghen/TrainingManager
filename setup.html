@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anatomy Master - Setup</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <script src="testQuestions.js"></script>
+</head>
+<body class="main-menu-bg">
+    <header>
+        <h1>Anatomy Master</h1>
+        <div class="nav-links">
+            <a href="index.html">🏠 Home</a>
+            <a href="setup.html">⚙️ Setup</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="card">
+            <h2>Setup & Einstellungen</h2>
+            <p style="margin-bottom: 2rem; opacity: 0.7;">Verwalten Sie Ihre Kategorien und App-Einstellungen.</p>
+            
+            <h3 style="margin-bottom: 1rem; opacity: 0.8; font-weight: 300;">Inhalt verwalten</h3>
+            <div class="menu-grid" style="margin-top: 0; margin-bottom: 2.5rem; grid-template-columns: 1fr;">
+                <a href="categories.html" class="btn btn-primary btn-menu">
+                    Kategorien
+                    <div id="setup-cat-count" style="font-size: 0.85rem; opacity: 0.8; font-weight: 300; margin-top: 0.3rem;">Lade...</div>
+                </a>
+                <a href="questions.html" class="btn btn-primary btn-menu">
+                    Fragekatalog
+                    <div id="setup-question-count" style="font-size: 0.85rem; opacity: 0.8; font-weight: 300; margin-top: 0.3rem;">Lade...</div>
+                </a>
+                <a href="edit-question.html" class="btn btn-primary btn-menu">Fragen erfassen</a>
+            </div>
+
+            <h3 style="margin-bottom: 1rem; opacity: 0.8; font-weight: 300;">Export / Import</h3>
+            <div class="menu-grid" style="margin-top: 0; margin-bottom: 2.5rem; grid-template-columns: 1fr;">
+                <button class="btn btn-glass btn-menu" onclick="exportData()">Fragen exportieren (.json)</button>
+                <button class="btn btn-glass btn-menu" onclick="document.getElementById('importFile').click()">Fragen importieren (.json)</button>
+            </div>
+
+            <h3 style="margin-bottom: 1rem; opacity: 0.8; font-weight: 300;">Testdaten</h3>
+            <div class="menu-grid" style="margin-top: 0; grid-template-columns: 1fr;">
+                <button class="btn btn-secondary btn-menu" onclick="createTestQuestions()">Testfragen erstellen</button>
+                <button class="btn btn-danger btn-menu" onclick="deleteTestQuestions()">Testfragen löschen</button>
+                <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(event)">
+            </div>
+        </div>
+    </main>
+
+    <script src="db.js"></script>
+    <script>
+        async function loadCounts() {
+            try {
+                await db.open();
+                const catCount = await db.categories.count();
+                const questionCount = await db.questions.count();
+                document.getElementById('setup-cat-count').innerText = `${catCount} Kategorien`;
+                document.getElementById('setup-question-count').innerText = `${questionCount} Fragen`;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        window.onload = loadCounts;
+
+        async function createTestQuestions() {
+            if (!confirm('Alle bestehenden Testfragen werden gelöscht und durch neue ersetzt. Fortfahren?')) return;
+            
+            try {
+                await db.open();
+                
+                // 1. Delete existing test questions first
+                const existingTestQuestions = await db.questions.where('isTest').equals(true).toArray();
+                const existingIds = existingTestQuestions.map(q => q.id);
+                if (existingIds.length > 0) {
+                    await db.questions.bulkDelete(existingIds);
+                }
+
+                // 2. Get or create categories
+                const requiredCategories = [...new Set(testQuestionsData.flatMap(q => q.categoryNames))];
+                for (const catName of requiredCategories) {
+                    const existing = await db.categories.where('name').equals(catName).first();
+                    if (!existing) {
+                        await db.categories.add({ name: catName });
+                    }
+                }
+                
+                const categories = await db.categories.toArray();
+                const catMap = Object.fromEntries(categories.map(c => [c.name, c.id]));
+                
+                // 3. Create new questions
+                const newQuestions = testQuestionsData.map(q => {
+                    const categoryIds = q.categoryNames.map(name => catMap[name]).filter(id => id !== undefined);
+                    return {
+                        text: q.text,
+                        answers: q.answers,
+                        categoryIds: categoryIds,
+                        isTest: true,
+                        status: 'unknown'
+                    };
+                });
+                
+                await db.questions.bulkAdd(newQuestions);
+                alert('100 neue Testfragen wurden erfolgreich erstellt. Bestehende Testfragen wurden ersetzt.\n\nFalls Sie noch alte Fragen sehen, laden Sie die Seite bitte mit Strg+F5 neu.');
+                loadCounts();
+            } catch (err) {
+                console.error(err);
+                alert('Fehler beim Erstellen: ' + err.message);
+            }
+        }
+
+        async function deleteTestQuestions() {
+            if (!confirm('Möchten Sie wirklich alle Testfragen unwiderruflich löschen?')) return;
+            
+            try {
+                await db.open();
+                const testQuestions = await db.questions.where('isTest').equals(true).toArray();
+                const testIds = testQuestions.map(q => q.id);
+                
+                if (testIds.length > 0) {
+                    await db.questions.bulkDelete(testIds);
+                    alert(`${testIds.length} Testfragen wurden gelöscht.`);
+                    loadCounts();
+                } else {
+                    alert('Keine Testfragen zum Löschen gefunden.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Fehler beim Löschen: ' + err.message);
+            }
+        }
+
+        async function exportData() {
+            try {
+                const questions = await db.questions.toArray();
+                const categories = await db.categories.toArray();
+                const data = { questions, categories };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'AnatomyMaster_Export.json';
+                a.click();
+            } catch (err) {
+                alert('Export fehlgeschlagen: ' + err.message);
+            }
+        }
+
+        async function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!confirm('Dies wird alle aktuellen Fragen und Kategorien überschreiben. Fortfahren?')) return;
+                    
+                    await db.transaction('rw', db.questions, db.categories, async () => {
+                        await db.questions.clear();
+                        await db.categories.clear();
+                        
+                        if (data.categories) await db.categories.bulkAdd(data.categories);
+                        if (data.questions) await db.questions.bulkAdd(data.questions);
+                    });
+                    
+                    alert('Import erfolgreich abgeschlossen!');
+                    location.reload();
+                } catch (err) {
+                    alert('Fehler beim Import: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>

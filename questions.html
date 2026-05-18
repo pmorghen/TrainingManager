@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anatomy Master - Fragen</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Anatomy Master</h1>
+        <div class="nav-links">
+            <a href="index.html">🏠 Home</a>
+            <a href="setup.html">⚙️ Setup</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2>Fragenkatalog</h2>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="file" id="csvImport" accept=".csv" style="display: none;" onchange="handleFileSelect(event)">
+                    <button onclick="document.getElementById('csvImport').click()" class="icon-btn" title="CSV Importieren" style="font-size: 0.9rem; color: var(--accent-color); border: 1px solid var(--glass-border); padding: 0 0.8rem; display: flex; align-items: center; gap: 5px;">📤 CSV Import</button>
+                    <a href="edit-question.html" class="icon-btn" title="Neue Frage" style="font-size: 1.5rem; color: var(--accent-color); border: 1px solid var(--glass-border);">➕</a>
+                </div>
+            </div>
+
+            <script>
+                async function handleFileSelect(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        await importCSV(file);
+                        event.target.value = ''; // Reset for next time
+                    }
+                }
+
+                async function importCSV(file) {
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                        const text = e.target.result;
+                        const lines = text.split(/\r?\n/);
+                        if (lines.length < 2) return;
+
+                        let lastCategoryId = null;
+                        let importCount = 0;
+
+                        for (let i = 1; i < lines.length; i++) {
+                            const line = lines[i];
+                            if (!line.trim()) continue;
+
+                            const cols = line.split(';');
+                            // Format: Modul;Nummer;Frage;Antwort;Antwort;...
+                            const moduleName = cols[0]?.trim();
+                            const questionText = cols[2]?.trim();
+
+                            if (!questionText) continue;
+
+                            // Handle Category (Module)
+                            if (moduleName) {
+                                let cat = await db.categories.where('name').equalsIgnoreCase(moduleName).first();
+                                if (!cat) {
+                                    lastCategoryId = await db.categories.add({ name: moduleName });
+                                } else {
+                                    lastCategoryId = cat.id;
+                                }
+                            }
+
+                            // Collect answers (cols 3 and onwards)
+                            const answers = [];
+                            for (let j = 3; j < cols.length; j++) {
+                                const ans = cols[j]?.trim();
+                                if (ans) answers.push(ans);
+                            }
+
+                            await db.questions.add({
+                                text: questionText,
+                                answers: answers,
+                                categoryIds: lastCategoryId ? [lastCategoryId] : [],
+                                status: 'new',
+                                isTest: false
+                            });
+                            importCount++;
+                        }
+                        alert(`${importCount} Fragen erfolgreich importiert!`);
+                        location.reload(); // Refresh to show new filters and questions
+                    };
+                    // Use ISO-8859-1 for German CSVs (umlauts)
+                    reader.readAsText(file, 'ISO-8859-1');
+                }
+            </script>
+
+            <div id="filterContainer" style="display: flex; gap: 0.8rem; margin-bottom: 2.5rem; flex-wrap: wrap; border-bottom: 1px solid var(--glass-border); padding-bottom: 1.5rem;">
+                <!-- Loaded via JS -->
+            </div>
+
+            <div id="questionList" class="item-list">
+                <!-- Loaded via JS -->
+            </div>
+        </div>
+    </main>
+
+    <script src="db.js"></script>
+    <script>
+        let currentFilter = 'all';
+
+        async function initCatalog() {
+            await loadFilters();
+            await loadQuestions();
+        }
+
+        async function loadFilters() {
+            const categories = await db.categories.toArray();
+            const container = document.getElementById('filterContainer');
+            container.innerHTML = '';
+
+            const allBtn = createFilterPill('all', 'Alle');
+            container.appendChild(allBtn);
+
+            categories.forEach(cat => {
+                const btn = createFilterPill(cat.id, cat.name);
+                container.appendChild(btn);
+            });
+        }
+
+        function createFilterPill(id, name) {
+            const btn = document.createElement('button');
+            btn.className = `btn btn-glass btn-sm ${currentFilter == id ? 'active-filter' : ''}`;
+            btn.style.padding = '0.5rem 1rem';
+            btn.style.fontSize = '0.85rem';
+            btn.style.borderRadius = '20px';
+            btn.innerText = name;
+            
+            if (currentFilter == id) {
+                btn.style.borderColor = 'var(--accent-color)';
+                btn.style.background = 'rgba(100, 255, 218, 0.1)';
+            }
+
+            btn.onclick = () => {
+                currentFilter = id;
+                loadFilters();
+                loadQuestions();
+            };
+            return btn;
+        }
+
+        async function loadQuestions() {
+            let questions = await db.questions.toArray();
+            const categories = await db.categories.toArray();
+            const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
+            
+            if (currentFilter !== 'all') {
+                questions = questions.filter(q => q.categoryIds && q.categoryIds.includes(parseInt(currentFilter)));
+            }
+            
+            const list = document.getElementById('questionList');
+            list.innerHTML = '';
+            
+            if (questions.length === 0) {
+                list.innerHTML = '<p class="text-center" style="opacity:0.5; padding: 2rem;">Keine Fragen in dieser Kategorie gefunden.</p>';
+                return;
+            }
+
+            questions.forEach(q => {
+                const qCats = (q.categoryIds || []).map(id => catMap[id] || 'Unbekannt').join(', ');
+                const div = document.createElement('div');
+                div.className = 'item-row';
+                div.innerHTML = `
+                    <div style="flex: 1;">
+                        <p>${q.text}</p>
+                        <small style="opacity: 0.6;">${qCats}</small>
+                    </div>
+                    <div class="actions">
+                        <a href="edit-question.html?id=${q.id}" class="icon-btn" title="Bearbeiten">✏️</a>
+                        <button class="icon-btn" onclick="deleteQuestion(${q.id})" title="Löschen">🗑️</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function deleteQuestion(id) {
+            if (confirm('Diese Frage wirklich löschen?')) {
+                await db.questions.delete(id);
+                loadQuestions();
+            }
+        }
+
+        window.onload = initCatalog;
+    </script>
+</body>
+</html>

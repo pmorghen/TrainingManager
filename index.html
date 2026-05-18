@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anatomy Master - Home</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body class="main-menu-bg">
+    <header>
+        <h1>Anatomy Master</h1>
+        <div class="nav-links">
+            <a href="index.html">🏠 Home</a>
+            <a href="setup.html">⚙️ Setup</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="text-center">
+            <h2 style="font-size: 3rem; margin-top: 2rem;">Willkommen</h2>
+            <p style="font-size: 1.2rem; opacity: 0.8;">Wählen Sie einen Trainingsmodus</p>
+        </div>
+
+        <div class="menu-grid">
+            <a href="#" id="link-all" class="btn btn-glass btn-menu" onclick="startTraining('all')">
+                Alle Fragen trainieren
+                <div id="count-all" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem;">Lade...</div>
+            </a>
+            <a href="#" id="link-hard" class="btn btn-glass btn-menu" onclick="startTraining('hard')">
+                Schwierige Fragen trainieren
+                <div id="count-hard" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem;">Lade...</div>
+            </a>
+            <a href="#" id="link-easy" class="btn btn-glass btn-menu" onclick="startTraining('easy')">
+                Einfache Fragen trainieren
+                <div id="count-easy" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem;">Lade...</div>
+            </a>
+            <a href="#" id="link-unknown" class="btn btn-glass btn-menu" onclick="startTraining('unknown')">
+                Nicht beantwortete Fragen trainieren
+                <div id="count-unknown" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem;">Lade...</div>
+            </a>
+        </div>
+    </main>
+
+    <footer class="container" style="margin-top: auto; padding-bottom: 2rem;">
+        <!-- Category Selector (Bottom) -->
+        <div id="categorySelector" class="card" style="margin-top: 5rem; max-width: 1100px; margin-left: auto; margin-right: auto; padding: 1.2rem; background: rgba(255,255,255,0.02);">
+            <div id="categoryPills" style="display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: center;">
+                <!-- Loaded via JS -->
+            </div>
+        </div>
+    </footer>
+
+    <script src="db.js"></script>
+    <script>
+        let selectedCategoryIds = [];
+
+        async function loadUI() {
+            try {
+                await db.open();
+                await loadFilters();
+                await updateCounts();
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function loadFilters() {
+            const categories = await db.categories.toArray();
+            const catContainer = document.getElementById('categoryPills');
+            catContainer.innerHTML = '';
+            
+            // Add "Alle"
+            const allBtn = createPill('all', 'Alle');
+            if (selectedCategoryIds.length === 0) highlightPill(allBtn, true);
+            catContainer.appendChild(allBtn);
+
+            categories.forEach(cat => {
+                const btn = createPill(cat.id, cat.name);
+                if (selectedCategoryIds.includes(cat.id)) highlightPill(btn, true);
+                catContainer.appendChild(btn);
+            });
+        }
+
+        function createPill(id, name) {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-glass btn-sm';
+            btn.style.borderRadius = '15px';
+            btn.style.padding = '0.3rem 1rem';
+            btn.style.fontSize = '0.85rem';
+            btn.style.fontWeight = '400';
+            btn.innerText = name;
+            btn.onclick = () => toggleCategory(id, btn);
+            return btn;
+        }
+
+        function highlightPill(btn, active) {
+            if (active) {
+                btn.style.borderColor = 'var(--accent-color)';
+                btn.style.background = 'rgba(100, 255, 218, 0.15)';
+                btn.style.color = 'var(--accent-color)';
+            } else {
+                btn.style.borderColor = '';
+                btn.style.background = '';
+                btn.style.color = '';
+            }
+        }
+
+        async function toggleCategory(id, btn) {
+            if (id === 'all') {
+                selectedCategoryIds = [];
+            } else {
+                if (selectedCategoryIds.includes(id)) {
+                    selectedCategoryIds = selectedCategoryIds.filter(cid => cid !== id);
+                } else {
+                    selectedCategoryIds.push(id);
+                }
+            }
+            
+            await loadFilters();
+            await updateCounts();
+        }
+
+        async function updateCounts() {
+            let questions = await db.questions.toArray();
+            
+            if (selectedCategoryIds.length > 0) {
+                questions = questions.filter(q => 
+                    q.categoryIds && q.categoryIds.some(id => selectedCategoryIds.includes(id))
+                );
+            }
+
+            const all = questions.length;
+            const hard = questions.filter(q => q.status === 'hard').length;
+            const easy = questions.filter(q => q.status === 'easy').length;
+            const unknown = questions.filter(q => q.status === 'unknown').length;
+            
+            document.getElementById('count-all').innerText = `${all} Fragen`;
+            document.getElementById('count-hard').innerText = `${hard} Fragen`;
+            document.getElementById('count-easy').innerText = `${easy} Fragen`;
+            document.getElementById('count-unknown').innerText = `${unknown} Fragen`;
+        }
+
+        function startTraining(mode) {
+            let url = `training.html?mode=${mode}`;
+            if (selectedCategoryIds.length > 0) {
+                url = `training.html?mode=category&catIds=${selectedCategoryIds.join(',')}&submode=${mode}`;
+            }
+            window.location.href = url;
+        }
+
+        window.onload = loadUI;
+    </script>
+</body>
+</html>

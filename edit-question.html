@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anatomy Master - Frage bearbeiten</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Anatomy Master</h1>
+        <div class="nav-links">
+            <a href="index.html">🏠 Home</a>
+            <a href="setup.html">⚙️ Setup</a>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="card">
+            <h2 id="pageTitle">Neue Frage erstellen</h2>
+            
+            <form id="questionForm" onsubmit="saveQuestion(event)" style="margin-top: 1.5rem;">
+                <div class="form-group">
+                    <label for="questionText">Frage Text</label>
+                    <textarea id="questionText" rows="3" required placeholder="Geben Sie die Frage ein..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Kategorien</label>
+                    <div id="categoryPills" style="display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 0.8rem;">
+                        <!-- Categories loaded here -->
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Richtige Antwort(en) / Teile (1-10)</label>
+                    <div id="answersList" class="answers-container">
+                        <!-- Initial 4 answers will be added here -->
+                    </div>
+                    <button type="button" class="btn btn-secondary mt-2" onclick="addAnswerRow()" id="addAnswerBtn"> + Antwort hinzufügen</button>
+                </div>
+
+                <div class="actions mt-2">
+                    <button type="submit" class="btn btn-primary">Speichern</button>
+                    <a href="questions.html" class="btn btn-secondary">Abbrechen</a>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <script src="db.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const questionId = urlParams.get('id');
+        const answersList = document.getElementById('answersList');
+        let answerCount = 0;
+
+        let selectedCategoryIds = [];
+
+        async function initPage() {
+            // Load Categories
+            const categories = await db.categories.toArray();
+            const catContainer = document.getElementById('categoryPills');
+            categories.forEach(cat => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-glass btn-sm';
+                btn.style.borderRadius = '20px';
+                btn.style.padding = '0.5rem 1.2rem';
+                btn.innerText = cat.name;
+                btn.onclick = () => toggleCategory(cat.id, btn);
+                btn.id = `pill-${cat.id}`;
+                catContainer.appendChild(btn);
+            });
+
+            if (questionId) {
+                document.getElementById('pageTitle').innerText = 'Frage bearbeiten';
+                const q = await db.questions.get(parseInt(questionId));
+                if (q) {
+                    document.getElementById('questionText').value = q.text;
+                    
+                    // Set selected categories
+                    if (q.categoryIds) {
+                        q.categoryIds.forEach(id => {
+                            const btn = document.getElementById(`pill-${id}`);
+                            if (btn) toggleCategory(id, btn);
+                        });
+                    }
+
+                    // Load answers
+                    q.answers.forEach(ans => addAnswerRow(ans));
+                    
+                    // Fill up to 4 if less
+                    while (answerCount < 4) addAnswerRow();
+                }
+            } else {
+                // Add initial 4 answers for new question
+                for (let i = 0; i < 4; i++) {
+                    addAnswerRow();
+                }
+            }
+        }
+
+        function addAnswerRow(val = '') {
+            if (answerCount >= 10) {
+                alert('Maximal 10 Antworten erlaubt.');
+                return;
+            }
+            answerCount++;
+            const div = document.createElement('div');
+            div.className = 'answer-row';
+            div.innerHTML = `
+                <input type="text" class="answer-input" placeholder="Antwort ${answerCount}" value="${val}">
+                ${answerCount > 1 ? '<button type="button" class="btn btn-danger btn-sm" onclick="removeAnswerRow(this)">X</button>' : ''}
+            `;
+            answersList.appendChild(div);
+            
+            if (answerCount >= 10) {
+                document.getElementById('addAnswerBtn').style.display = 'none';
+            }
+        }
+
+        function removeAnswerRow(btn) {
+            btn.parentElement.remove();
+            answerCount--;
+            document.getElementById('addAnswerBtn').style.display = 'inline-block';
+            updatePlaceholders();
+        }
+
+        function updatePlaceholders() {
+            const inputs = document.querySelectorAll('.answer-input');
+            inputs.forEach((input, index) => {
+                input.placeholder = `Antwort ${index + 1}`;
+            });
+        }
+
+        function toggleCategory(id, btn) {
+            if (selectedCategoryIds.includes(id)) {
+                selectedCategoryIds = selectedCategoryIds.filter(cid => cid !== id);
+                btn.style.borderColor = '';
+                btn.style.background = '';
+                btn.style.color = '';
+            } else {
+                selectedCategoryIds.push(id);
+                btn.style.borderColor = 'var(--accent-color)';
+                btn.style.background = 'rgba(100, 255, 218, 0.15)';
+                btn.style.color = 'var(--accent-color)';
+            }
+        }
+
+        async function saveQuestion(e) {
+            e.preventDefault();
+            
+            const text = document.getElementById('questionText').value;
+            const categoryIds = selectedCategoryIds;
+            const answers = Array.from(document.querySelectorAll('.answer-input')).map(input => input.value.trim()).filter(v => v !== '');
+
+            if (answers.length === 0) {
+                alert('Mindestens eine Antwort ist erforderlich.');
+                return;
+            }
+
+            const questionData = {
+                text: text,
+                categoryIds: categoryIds,
+                answers: answers,
+                status: 'unknown' // Default status for new questions
+            };
+
+            if (questionId) {
+                await db.questions.update(parseInt(questionId), questionData);
+            } else {
+                await db.questions.add(questionData);
+            }
+
+            window.location.href = 'questions.html';
+        }
+
+        window.onload = initPage;
+    </script>
+</body>
+</html>
