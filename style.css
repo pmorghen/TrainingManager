@@ -167,6 +167,35 @@ header h1 {
         padding: 0.4rem;
         line-height: 1.1;
     }
+    
+    header {
+        position: static !important;
+        padding: 1rem !important;
+    }
+    
+    .container {
+        margin: 0.5rem auto !important;
+        padding: 0 0.8rem !important;
+    }
+    
+    #trainingCard {
+        background: none !important;
+        border: none !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        margin: 1rem auto !important;
+        min-height: auto !important;
+    }
+    
+    #questionText {
+        font-size: 1.15rem !important;
+        margin-bottom: 1.5rem !important;
+    }
+    
+    #actionArea {
+        padding-top: 1.5rem !important;
+        margin-top: 1.5rem !important;
+    }
 }
 
 .icon-btn {
