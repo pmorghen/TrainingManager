@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anatomy Master - Setup</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body class="main-menu-bg">
+    <header style="position: relative; justify-content: center;">
+        <a href="index.html" class="icon-btn" style="position: absolute; left: 2rem; padding: 0.5rem; opacity: 0.7;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1>Setup</h1>
+    </header>
+
+    <main class="container" style="max-width: 98%; padding: 0 0.5rem;">
+        <div class="menu-grid" style="margin-top: 1rem; width: 100%;">
+            <!-- Button 1: Kategorien -->
+            <a href="categories.html" id="link-categories" class="btn btn-glass btn-menu">
+                Kategorien
+                <div id="setup-cat-count" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">Lade...</div>
+            </a>
+            
+            <!-- Button 2: Fragekatalog -->
+            <a href="questions.html" id="link-questions" class="btn btn-glass btn-menu">
+                Fragekatalog
+                <div id="setup-question-count" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">Lade...</div>
+            </a>
+            
+            <!-- Button 3: Fragen erfassen -->
+            <a href="edit-question.html" id="link-add-question" class="btn btn-glass btn-menu">
+                Fragen erfassen
+            </a>
+            
+            <!-- Button 4: CSV importieren -->
+            <button class="btn btn-glass btn-menu" onclick="document.getElementById('csvImport').click()">
+                CSV importieren
+                <div id="last-csv-import" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">nie</div>
+            </button>
+            <input type="file" id="csvImport" style="display: none;" accept=".csv" onchange="handleFileSelect(event)">
+            
+            <!-- Button 5: Stand exportieren -->
+            <button class="btn btn-glass btn-menu" onclick="exportData()">
+                Aktuellen Stand exportieren
+                <div id="last-json-export" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">nie</div>
+            </button>
+            
+            <!-- Button 6: Stand importieren -->
+            <button class="btn btn-glass btn-menu" onclick="document.getElementById('importFile').click()">
+                Aktuellen Stand importieren
+                <div id="last-json-import" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">nie</div>
+            </button>
+            <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(event)">
+        </div>
+    </main>
+
+    <script src="db.js"></script>
+    <script>
+        function formatDateTime(isoString) {
+            if (!isoString) return 'nie';
+            const date = new Date(isoString);
+            if (isNaN(date.getTime())) return 'nie';
+            const pad = (n) => n.toString().padStart(2, '0');
+            const day = pad(date.getDate());
+            const month = pad(date.getMonth() + 1);
+            const year = date.getFullYear();
+            const hours = pad(date.getHours());
+            const minutes = pad(date.getMinutes());
+            return `${day}.${month}.${year}, ${hours}:${minutes} Uhr`;
+        }
+
+        async function loadCounts() {
+            try {
+                await db.open();
+                const catCount = await db.categories.count();
+                const questionCount = await db.questions.count();
+                document.getElementById('setup-cat-count').innerText = `${catCount} Kategorien`;
+                document.getElementById('setup-question-count').innerText = `${questionCount} Fragen`;
+
+                const csvImportTime = localStorage.getItem('lastCSVImport');
+                const jsonExportTime = localStorage.getItem('lastJSONExport');
+                const jsonImportTime = localStorage.getItem('lastJSONImport');
+                
+                document.getElementById('last-csv-import').innerText = formatDateTime(csvImportTime);
+                document.getElementById('last-json-export').innerText = formatDateTime(jsonExportTime);
+                document.getElementById('last-json-import').innerText = formatDateTime(jsonImportTime);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        window.onload = loadCounts;
+
+        async function exportData() {
+            try {
+                const questions = await db.questions.toArray();
+                const categories = await db.categories.toArray();
+                const data = { questions, categories };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'AnatomyMaster_Export.json';
+                a.click();
+
+                localStorage.setItem('lastJSONExport', new Date().toISOString());
+                document.getElementById('last-json-export').innerText = formatDateTime(new Date().toISOString());
+            } catch (err) {
+                alert('Export fehlgeschlagen: ' + err.message);
+            }
+        }
+
+        async function backupData() {
+            try {
+                const questions = await db.questions.toArray();
+                const categories = await db.categories.toArray();
+                const data = { questions, categories };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'AnatomyMaster_Export_sicherung.json';
+                a.click();
+                // Wait briefly to make sure the browser triggers the download
+                await new Promise(resolve => setTimeout(resolve, 300));
+            } catch (err) {
+                console.error('Backup fehlgeschlagen: ', err);
+            }
+        }
+
+        async function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!confirm('Dies wird alle aktuellen Fragen und Kategorien überschreiben. Fortfahren?')) return;
+                    
+                    await backupData();
+                    
+                    await db.transaction('rw', db.questions, db.categories, async () => {
+                        await db.questions.clear();
+                        await db.categories.clear();
+                        
+                        if (data.categories) await db.categories.bulkAdd(data.categories);
+                        if (data.questions) await db.questions.bulkAdd(data.questions);
+                    });
+                    
+                    localStorage.setItem('lastJSONImport', new Date().toISOString());
+
+                    alert('Import erfolgreich abgeschlossen!');
+                    location.reload();
+                } catch (err) {
+                    alert('Fehler beim Import: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                await importCSV(file);
+                event.target.value = ''; // Reset for next time
+            }
+        }
+
+        async function importCSV(file) {
+            await backupData();
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const text = e.target.result;
+                    const lines = text.split(/\r?\n/);
+                    if (lines.length < 2) return;
+
+                    let lastCategoryId = null;
+                    let importCount = 0;
+
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i];
+                        if (!line.trim()) continue;
+
+                        const cols = line.split(';');
+                        // Format: Modul;Nummer;Frage;Antwort;Antwort;...
+                        const moduleName = cols[0]?.trim();
+                        const questionText = cols[2]?.trim();
+
+                        if (!questionText) continue;
+
+                        // Handle Category (Module)
+                        if (moduleName) {
+                            let cat = await db.categories.where('name').equalsIgnoreCase(moduleName).first();
+                            if (!cat) {
+                                lastCategoryId = await db.categories.add({ name: moduleName });
+                            } else {
+                                lastCategoryId = cat.id;
+                            }
+                        }
+
+                        // Collect answers (cols 3 and onwards)
+                        const answers = [];
+                        for (let j = 3; j < cols.length; j++) {
+                            const ans = cols[j]?.trim();
+                            if (ans) answers.push(ans);
+                        }
+
+                        await db.questions.add({
+                            text: questionText,
+                            answers: answers,
+                            categoryIds: lastCategoryId ? [lastCategoryId] : [],
+                            status: 'new',
+                            isTest: false
+                        });
+                        importCount++;
+                    }
+
+                    localStorage.setItem('lastCSVImport', new Date().toISOString());
+
+                    alert(`${importCount} Fragen erfolgreich importiert!`);
+                    location.reload();
+                } catch (err) {
+                    alert('Fehler beim CSV-Import: ' + err.message);
+                }
+            };
+            reader.readAsText(file, 'ISO-8859-1');
+        }
+    </script>
+</body>
+</html>

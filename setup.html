@@ -6,47 +6,29 @@
     <title>Anatomy Master - Setup</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
-    <script src="testQuestions.js"></script>
 </head>
 <body class="main-menu-bg">
-    <header>
-        <h1>Anatomy Master</h1>
-        <div class="nav-links">
-            <a href="index.html">🏠 Home</a>
-            <a href="setup.html">⚙️ Setup</a>
-        </div>
+    <header style="position: relative; justify-content: center;">
+        <a href="index.html" class="icon-btn" style="position: absolute; left: 2rem; padding: 0.5rem; opacity: 0.7;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1>Setup</h1>
     </header>
 
-    <main class="container">
-        <div class="card">
-            <h2>Setup & Einstellungen</h2>
-            <p style="margin-bottom: 2rem; opacity: 0.7;">Verwalten Sie Ihre Kategorien und App-Einstellungen.</p>
-            
-            <h3 style="margin-bottom: 1rem; opacity: 0.8; font-weight: 300;">Inhalt verwalten</h3>
-            <div class="menu-grid" style="margin-top: 0; margin-bottom: 2.5rem; grid-template-columns: 1fr;">
-                <a href="categories.html" class="btn btn-primary btn-menu">
-                    Kategorien
-                    <div id="setup-cat-count" style="font-size: 0.85rem; opacity: 0.8; font-weight: 300; margin-top: 0.3rem;">Lade...</div>
-                </a>
-                <a href="questions.html" class="btn btn-primary btn-menu">
-                    Fragekatalog
-                    <div id="setup-question-count" style="font-size: 0.85rem; opacity: 0.8; font-weight: 300; margin-top: 0.3rem;">Lade...</div>
-                </a>
-                <a href="edit-question.html" class="btn btn-primary btn-menu">Fragen erfassen</a>
-            </div>
-
-            <h3 style="margin-bottom: 1rem; opacity: 0.8; font-weight: 300;">Export / Import</h3>
-            <div class="menu-grid" style="margin-top: 0; margin-bottom: 2.5rem; grid-template-columns: 1fr;">
-                <button class="btn btn-glass btn-menu" onclick="exportData()">Fragen exportieren (.json)</button>
-                <button class="btn btn-glass btn-menu" onclick="document.getElementById('importFile').click()">Fragen importieren (.json)</button>
-            </div>
-
-            <h3 style="margin-bottom: 1rem; opacity: 0.8; font-weight: 300;">Testdaten</h3>
-            <div class="menu-grid" style="margin-top: 0; grid-template-columns: 1fr;">
-                <button class="btn btn-secondary btn-menu" onclick="createTestQuestions()">Testfragen erstellen</button>
-                <button class="btn btn-danger btn-menu" onclick="deleteTestQuestions()">Testfragen löschen</button>
-                <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(event)">
-            </div>
+    <main class="container" style="max-width: 98%; padding: 0 0.5rem;">
+        <div class="menu-grid" style="margin-top: 1rem; width: 100%;">
+            <a href="categories.html" class="btn btn-glass btn-menu">
+                Kategorien
+                <div id="setup-cat-count" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">Lade...</div>
+            </a>
+            <a href="questions.html" class="btn btn-glass btn-menu">
+                Fragekatalog
+                <div id="setup-question-count" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">Lade...</div>
+            </a>
+            <a href="edit-question.html" class="btn btn-glass btn-menu">Fragen erfassen</a>
+            <button class="btn btn-glass btn-menu" onclick="exportData()">Aktuellen Stand exportieren</button>
+            <button class="btn btn-glass btn-menu" onclick="document.getElementById('importFile').click()">Aktuellen Stand importieren</button>
+            <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(event)">
         </div>
     </main>
 
@@ -65,73 +47,6 @@
         }
 
         window.onload = loadCounts;
-
-        async function createTestQuestions() {
-            if (!confirm('Alle bestehenden Testfragen werden gelöscht und durch neue ersetzt. Fortfahren?')) return;
-            
-            try {
-                await db.open();
-                
-                // 1. Delete existing test questions first
-                const existingTestQuestions = await db.questions.where('isTest').equals(true).toArray();
-                const existingIds = existingTestQuestions.map(q => q.id);
-                if (existingIds.length > 0) {
-                    await db.questions.bulkDelete(existingIds);
-                }
-
-                // 2. Get or create categories
-                const requiredCategories = [...new Set(testQuestionsData.flatMap(q => q.categoryNames))];
-                for (const catName of requiredCategories) {
-                    const existing = await db.categories.where('name').equals(catName).first();
-                    if (!existing) {
-                        await db.categories.add({ name: catName });
-                    }
-                }
-                
-                const categories = await db.categories.toArray();
-                const catMap = Object.fromEntries(categories.map(c => [c.name, c.id]));
-                
-                // 3. Create new questions
-                const newQuestions = testQuestionsData.map(q => {
-                    const categoryIds = q.categoryNames.map(name => catMap[name]).filter(id => id !== undefined);
-                    return {
-                        text: q.text,
-                        answers: q.answers,
-                        categoryIds: categoryIds,
-                        isTest: true,
-                        status: 'unknown'
-                    };
-                });
-                
-                await db.questions.bulkAdd(newQuestions);
-                alert('100 neue Testfragen wurden erfolgreich erstellt. Bestehende Testfragen wurden ersetzt.\n\nFalls Sie noch alte Fragen sehen, laden Sie die Seite bitte mit Strg+F5 neu.');
-                loadCounts();
-            } catch (err) {
-                console.error(err);
-                alert('Fehler beim Erstellen: ' + err.message);
-            }
-        }
-
-        async function deleteTestQuestions() {
-            if (!confirm('Möchten Sie wirklich alle Testfragen unwiderruflich löschen?')) return;
-            
-            try {
-                await db.open();
-                const testQuestions = await db.questions.where('isTest').equals(true).toArray();
-                const testIds = testQuestions.map(q => q.id);
-                
-                if (testIds.length > 0) {
-                    await db.questions.bulkDelete(testIds);
-                    alert(`${testIds.length} Testfragen wurden gelöscht.`);
-                    loadCounts();
-                } else {
-                    alert('Keine Testfragen zum Löschen gefunden.');
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Fehler beim Löschen: ' + err.message);
-            }
-        }
 
         async function exportData() {
             try {

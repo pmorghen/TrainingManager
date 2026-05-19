@@ -8,92 +8,30 @@
     <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
 </head>
 <body>
-    <header>
-        <h1>Anatomy Master</h1>
-        <div class="nav-links">
-            <a href="index.html">🏠 Home</a>
-            <a href="setup.html">⚙️ Setup</a>
+    <header style="justify-content: center;">
+        <a href="setup_new.html" class="icon-btn" style="position: absolute; left: 2rem; padding: 0.5rem; opacity: 0.7;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1>Fragenkatalog</h1>
+        <div style="position: absolute; right: 2rem; display: flex; gap: 0.5rem; align-items: center;">
+            <a href="edit-question.html" class="icon-btn" title="Neue Frage" style="font-size: 1.5rem; color: var(--accent-color); padding: 0.5rem; text-decoration: none;">➕</a>
         </div>
     </header>
 
     <main class="container">
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2>Fragenkatalog</h2>
-                <div style="display: flex; gap: 0.5rem;">
-                    <input type="file" id="csvImport" accept=".csv" style="display: none;" onchange="handleFileSelect(event)">
-                    <button onclick="document.getElementById('csvImport').click()" class="icon-btn" title="CSV Importieren" style="font-size: 0.9rem; color: var(--accent-color); border: 1px solid var(--glass-border); padding: 0 0.8rem; display: flex; align-items: center; gap: 5px;">📤 CSV Import</button>
-                    <a href="edit-question.html" class="icon-btn" title="Neue Frage" style="font-size: 1.5rem; color: var(--accent-color); border: 1px solid var(--glass-border);">➕</a>
+
+
+            <!-- Category Filter Button -->
+            <a href="select-categories.html?from=questions" class="btn btn-glass btn-menu" style="border-color: var(--accent-color); background: rgba(100, 255, 218, 0.05); margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="selected-categories-text" style="font-weight: 600; text-transform: none; letter-spacing: normal; color: var(--accent-color);">Lade Kategorien...</span>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-color)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-left: 0.5rem;">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
                 </div>
-            </div>
-
-            <script>
-                async function handleFileSelect(event) {
-                    const file = event.target.files[0];
-                    if (file) {
-                        await importCSV(file);
-                        event.target.value = ''; // Reset for next time
-                    }
-                }
-
-                async function importCSV(file) {
-                    const reader = new FileReader();
-                    reader.onload = async (e) => {
-                        const text = e.target.result;
-                        const lines = text.split(/\r?\n/);
-                        if (lines.length < 2) return;
-
-                        let lastCategoryId = null;
-                        let importCount = 0;
-
-                        for (let i = 1; i < lines.length; i++) {
-                            const line = lines[i];
-                            if (!line.trim()) continue;
-
-                            const cols = line.split(';');
-                            // Format: Modul;Nummer;Frage;Antwort;Antwort;...
-                            const moduleName = cols[0]?.trim();
-                            const questionText = cols[2]?.trim();
-
-                            if (!questionText) continue;
-
-                            // Handle Category (Module)
-                            if (moduleName) {
-                                let cat = await db.categories.where('name').equalsIgnoreCase(moduleName).first();
-                                if (!cat) {
-                                    lastCategoryId = await db.categories.add({ name: moduleName });
-                                } else {
-                                    lastCategoryId = cat.id;
-                                }
-                            }
-
-                            // Collect answers (cols 3 and onwards)
-                            const answers = [];
-                            for (let j = 3; j < cols.length; j++) {
-                                const ans = cols[j]?.trim();
-                                if (ans) answers.push(ans);
-                            }
-
-                            await db.questions.add({
-                                text: questionText,
-                                answers: answers,
-                                categoryIds: lastCategoryId ? [lastCategoryId] : [],
-                                status: 'new',
-                                isTest: false
-                            });
-                            importCount++;
-                        }
-                        alert(`${importCount} Fragen erfolgreich importiert!`);
-                        location.reload(); // Refresh to show new filters and questions
-                    };
-                    // Use ISO-8859-1 for German CSVs (umlauts)
-                    reader.readAsText(file, 'ISO-8859-1');
-                }
-            </script>
-
-            <div id="filterContainer" style="display: flex; gap: 0.8rem; margin-bottom: 2.5rem; flex-wrap: wrap; border-bottom: 1px solid var(--glass-border); padding-bottom: 1.5rem;">
-                <!-- Loaded via JS -->
-            </div>
+            </a>
 
             <div id="questionList" class="item-list">
                 <!-- Loaded via JS -->
@@ -103,46 +41,24 @@
 
     <script src="db.js"></script>
     <script>
-        let currentFilter = 'all';
+        let selectedCategoryIds = JSON.parse(localStorage.getItem('selectedCategories') || '[]');
 
         async function initCatalog() {
-            await loadFilters();
+            await loadCategoryFilterUI();
             await loadQuestions();
         }
 
-        async function loadFilters() {
+        async function loadCategoryFilterUI() {
             const categories = await db.categories.toArray();
-            const container = document.getElementById('filterContainer');
-            container.innerHTML = '';
-
-            const allBtn = createFilterPill('all', 'Alle');
-            container.appendChild(allBtn);
-
-            categories.forEach(cat => {
-                const btn = createFilterPill(cat.id, cat.name);
-                container.appendChild(btn);
-            });
-        }
-
-        function createFilterPill(id, name) {
-            const btn = document.createElement('button');
-            btn.className = `btn btn-glass btn-sm ${currentFilter == id ? 'active-filter' : ''}`;
-            btn.style.padding = '0.5rem 1rem';
-            btn.style.fontSize = '0.85rem';
-            btn.style.borderRadius = '20px';
-            btn.innerText = name;
-            
-            if (currentFilter == id) {
-                btn.style.borderColor = 'var(--accent-color)';
-                btn.style.background = 'rgba(100, 255, 218, 0.1)';
+            const textEl = document.getElementById('selected-categories-text');
+            if (selectedCategoryIds.length === 0) {
+                textEl.innerText = "Alle Kategorien";
+            } else {
+                const chosenNames = categories
+                    .filter(c => selectedCategoryIds.includes(c.id))
+                    .map(c => c.name);
+                textEl.innerText = chosenNames.length > 0 ? chosenNames.join(', ') : "Keine Kategorien";
             }
-
-            btn.onclick = () => {
-                currentFilter = id;
-                loadFilters();
-                loadQuestions();
-            };
-            return btn;
         }
 
         async function loadQuestions() {
@@ -150,15 +66,17 @@
             const categories = await db.categories.toArray();
             const catMap = Object.fromEntries(categories.map(c => [c.id, c.name]));
             
-            if (currentFilter !== 'all') {
-                questions = questions.filter(q => q.categoryIds && q.categoryIds.includes(parseInt(currentFilter)));
+            if (selectedCategoryIds.length > 0) {
+                questions = questions.filter(q => 
+                    q.categoryIds && q.categoryIds.some(id => selectedCategoryIds.includes(id))
+                );
             }
             
             const list = document.getElementById('questionList');
             list.innerHTML = '';
             
             if (questions.length === 0) {
-                list.innerHTML = '<p class="text-center" style="opacity:0.5; padding: 2rem;">Keine Fragen in dieser Kategorie gefunden.</p>';
+                list.innerHTML = '<p class="text-center" style="opacity:0.5; padding: 2rem;">Keine Fragen in den ausgewählten Kategorien gefunden.</p>';
                 return;
             }
 

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anatomy Master - Kategorien wählen</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+</head>
+<body class="main-menu-bg">
+    <header style="position: relative; justify-content: center;">
+        <a href="#" onclick="goBack(); return false;" class="icon-btn" style="position: absolute; left: 2rem; padding: 0.5rem; opacity: 0.7;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path></svg>
+        </a>
+        <h1>Kategorien wählen</h1>
+    </header>
+
+    <main class="container">
+        <div class="card">
+            <h2 style="margin-bottom: 2rem; text-align: center;">Welche Kategorien möchten Sie trainieren?</h2>
+            
+            <div id="categoryList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- Loaded via JS -->
+            </div>
+            
+            <button class="btn btn-primary training-btn" style="margin-top: 2rem;" onclick="goBack()">Speichern & Zurück</button>
+        </div>
+    </main>
+
+    <script src="db.js"></script>
+    <script>
+        let selectedCategoryIds = JSON.parse(localStorage.getItem('selectedCategories') || '[]');
+
+        async function loadUI() {
+            try {
+                await db.open();
+                const categories = await db.categories.toArray();
+                const container = document.getElementById('categoryList');
+                container.innerHTML = '';
+                
+                // Add "Alle"
+                const allRow = document.createElement('div');
+                allRow.className = 'item-row';
+                allRow.style.cursor = 'pointer';
+                const isAll = selectedCategoryIds.length === 0;
+                if (isAll) allRow.style.borderColor = 'var(--accent-color)';
+                allRow.innerHTML = `
+                    <div style="font-size: 1.1rem;">Alle Kategorien</div>
+                    <div style="font-size: 1.5rem;">${isAll ? '☑️' : '◻️'}</div>
+                `;
+                allRow.onclick = () => {
+                    selectedCategoryIds = [];
+                    saveAndReload();
+                };
+                container.appendChild(allRow);
+
+                categories.forEach(cat => {
+                    const row = document.createElement('div');
+                    row.className = 'item-row';
+                    row.style.cursor = 'pointer';
+                    const isSelected = selectedCategoryIds.includes(cat.id);
+                    if (isSelected) row.style.borderColor = 'var(--accent-color)';
+                    row.innerHTML = `
+                        <div style="font-size: 1.1rem;">${cat.name}</div>
+                        <div style="font-size: 1.5rem;">${isSelected ? '☑️' : '◻️'}</div>
+                    `;
+                    row.onclick = () => {
+                        if (selectedCategoryIds.includes(cat.id)) {
+                            selectedCategoryIds = selectedCategoryIds.filter(id => id !== cat.id);
+                        } else {
+                            selectedCategoryIds.push(cat.id);
+                        }
+                        saveAndReload();
+                    };
+                    container.appendChild(row);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function saveAndReload() {
+            localStorage.setItem('selectedCategories', JSON.stringify(selectedCategoryIds));
+            loadUI();
+        }
+
+        function goBack() {
+            const params = new URLSearchParams(window.location.search);
+            const from = params.get('from');
+            if (from === 'questions') {
+                window.location.href = 'questions.html';
+            } else if (from === 'index') {
+                window.location.href = 'index.html';
+            } else if (document.referrer && (document.referrer.includes('questions.html') || document.referrer.includes('questions_new.html'))) {
+                window.location.href = 'questions.html';
+            } else {
+                window.location.href = 'index.html';
+            }
+        }
+
+        window.onload = loadUI;
+    </script>
+</body>
+</html>
