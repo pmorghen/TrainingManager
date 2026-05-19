@@ -35,11 +35,11 @@
             </a>
             
             <!-- Button 4: CSV importieren -->
-            <button class="btn btn-glass btn-menu" onclick="document.getElementById('csvImport').click()">
+            <label class="btn btn-glass btn-menu" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center;">
                 CSV importieren
                 <div id="last-csv-import" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">nie</div>
-            </button>
-            <input type="file" id="csvImport" style="display: none;" accept=".csv" onchange="handleFileSelect(event)">
+                <input type="file" id="csvImport" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;" accept=".csv, text/csv, text/plain, application/vnd.ms-excel" onchange="handleFileSelect(event)">
+            </label>
             
             <!-- Button 5: Stand exportieren -->
             <button class="btn btn-glass btn-menu" onclick="exportData()">
@@ -112,23 +112,6 @@
             }
         }
 
-        async function backupData() {
-            try {
-                const questions = await db.questions.toArray();
-                const categories = await db.categories.toArray();
-                const data = { questions, categories };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'AnatomyMaster_Export_sicherung.json';
-                a.click();
-                // Wait briefly to make sure the browser triggers the download
-                await new Promise(resolve => setTimeout(resolve, 300));
-            } catch (err) {
-                console.error('Backup fehlgeschlagen: ', err);
-            }
-        }
 
         async function importData(event) {
             const file = event.target.files[0];
@@ -139,8 +122,6 @@
                 try {
                     const data = JSON.parse(e.target.result);
                     if (!confirm('Dies wird alle aktuellen Fragen und Kategorien überschreiben. Fortfahren?')) return;
-                    
-                    await backupData();
                     
                     await db.transaction('rw', db.questions, db.categories, async () => {
                         await db.questions.clear();
@@ -170,8 +151,6 @@
         }
 
         async function importCSV(file) {
-            await backupData();
-
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
