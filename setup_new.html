@@ -190,17 +190,40 @@
                     const lines = text.split(/\r?\n/);
                     if (lines.length < 2) return;
 
+                    // Dynamically map columns based on the header row
+                    const header = lines[0].split(';').map(c => c.trim().toLowerCase());
+                    let moduleIdx = header.indexOf('modul');
+                    let questionIdx = header.indexOf('frage');
+                    let startAnswerIdx = -1;
+
+                    if (moduleIdx === -1) moduleIdx = 0;
+                    
+                    if (questionIdx === -1) {
+                        const foundFrageIdx = header.findIndex(c => c.includes('frage'));
+                        if (foundFrageIdx !== -1) {
+                            questionIdx = foundFrageIdx;
+                        } else {
+                            questionIdx = 2; // Fallback to old format: Modul;Nummer;Frage...
+                        }
+                    }
+
+                    const firstAntwortIdx = header.findIndex(c => c.includes('antwort'));
+                    if (firstAntwortIdx !== -1) {
+                        startAnswerIdx = firstAntwortIdx;
+                    } else {
+                        startAnswerIdx = questionIdx + 1;
+                    }
+
                     let lastCategoryId = null;
                     let importCount = 0;
 
                     for (let i = 1; i < lines.length; i++) {
                         const line = lines[i];
-                        if (!line.trim()) continue;
+                        if (!line.trim() || /^[;\s]+$/.test(line)) continue;
 
                         const cols = line.split(';');
-                        // Format: Modul;Nummer;Frage;Antwort;Antwort;...
-                        const moduleName = cols[0]?.trim();
-                        const questionText = cols[2]?.trim();
+                        const moduleName = cols[moduleIdx]?.trim();
+                        const questionText = cols[questionIdx]?.trim();
 
                         if (!questionText) continue;
 
@@ -214,9 +237,9 @@
                             }
                         }
 
-                        // Collect answers (cols 3 and onwards)
+                        // Collect answers (cols from startAnswerIdx onwards)
                         const answers = [];
-                        for (let j = 3; j < cols.length; j++) {
+                        for (let j = startAnswerIdx; j < cols.length; j++) {
                             const ans = cols[j]?.trim();
                             if (ans) answers.push(ans);
                         }
