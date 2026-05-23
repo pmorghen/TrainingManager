@@ -53,6 +53,12 @@
                 <div id="last-json-import" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">nie</div>
             </button>
             <input type="file" id="importFile" style="display: none;" accept=".json" onchange="importData(event)">
+            
+            <!-- Button 7: Alle Fragen löschen -->
+            <button class="btn btn-danger-glass btn-menu" onclick="deleteAllData()">
+                Alle Fragen löschen
+                <div id="last-data-deletion" style="font-size: 0.9rem; opacity: 0.6; margin-top: 0.5rem; text-transform: none; letter-spacing: normal;">nie</div>
+            </button>
         </div>
     </main>
 
@@ -82,16 +88,42 @@
                 const csvImportTime = localStorage.getItem('lastCSVImport');
                 const jsonExportTime = localStorage.getItem('lastJSONExport');
                 const jsonImportTime = localStorage.getItem('lastJSONImport');
+                const dataDeletionTime = localStorage.getItem('lastDataDeletion');
                 
                 document.getElementById('last-csv-import').innerText = formatDateTime(csvImportTime);
                 document.getElementById('last-json-export').innerText = formatDateTime(jsonExportTime);
                 document.getElementById('last-json-import').innerText = formatDateTime(jsonImportTime);
+                document.getElementById('last-data-deletion').innerText = formatDateTime(dataDeletionTime);
             } catch (err) {
                 console.error(err);
             }
         }
 
         window.onload = loadCounts;
+
+        async function deleteAllData() {
+            const confirm1 = confirm("Möchten Sie wirklich alle Fragen und Kategorien löschen?");
+            if (!confirm1) return;
+
+            const confirm2 = confirm("Sind Sie absolut sicher? Dieser Vorgang kann nicht rückgängig gemacht werden!");
+            if (!confirm2) return;
+
+            const confirm3 = confirm("LETZTE WARNUNG: Wirklich unwiderruflich ALLE Fragen und Kategorien löschen?");
+            if (!confirm3) return;
+
+            try {
+                await db.transaction('rw', db.questions, db.categories, async () => {
+                    await db.questions.clear();
+                    await db.categories.clear();
+                });
+                
+                localStorage.setItem('lastDataDeletion', new Date().toISOString());
+                alert("Alle Fragen und Kategorien wurden erfolgreich gelöscht!");
+                location.reload();
+            } catch (err) {
+                alert("Fehler beim Löschen der Daten: " + err.message);
+            }
+        }
 
         async function exportData() {
             try {

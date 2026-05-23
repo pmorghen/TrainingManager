@@ -147,6 +147,21 @@ header h1 {
     box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
 }
 
+.btn-danger-glass {
+    background: rgba(255, 77, 77, 0.12);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 77, 77, 0.25);
+    color: #ff9999;
+    transition: all 0.3s ease;
+}
+
+.btn-danger-glass:hover {
+    background: rgba(255, 77, 77, 0.22);
+    border-color: #ff4d4d;
+    box-shadow: 0 0 20px rgba(255, 77, 77, 0.4);
+    color: #ffcccc;
+}
+
 .training-btn {
     height: 50px;
     white-space: nowrap;
